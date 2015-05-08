@@ -123,12 +123,13 @@ module Globalize
               where(Spree::Variant.arel_table[:is_master].eq(true))
 
             records.find_each do |record|
-              locale = locales[record.iso_name] || :en
-              translation = record.translation_for(locale) || record.translations.build(locale: locale)
-              fields.each do |attribute_name, attribute_type|
-                translation[attribute_name] = record.read_attribute(attribute_name, { translated: false })
+              [locales[record.iso_name], :en].compact.uniq.each do |locale|
+                translation = record.translation_for(locale) || record.translations.build(locale: locale)
+                fields.each do |attribute_name, attribute_type|
+                  translation[attribute_name] = record.read_attribute(attribute_name, { translated: false })
+                end
+                translation.save!
               end
-              translation.save!
             end
           else
             model.find_each do |record|
