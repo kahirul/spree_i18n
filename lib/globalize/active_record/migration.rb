@@ -16,9 +16,10 @@ module Globalize
       class Migrator
         include Globalize::ActiveRecord::Exceptions
 
-        attr_reader :model, :fields
+        attr_reader :model
+        attr_accessor :fields
         delegate :translated_attribute_names, :connection, :table_name,
-          :table_name_prefix, :translations_table_name, :columns, :to => :model
+          :table_name_prefix, :translations_table_name, :columns, to: :model
 
         def initialize(model)
           @model = model
@@ -109,13 +110,39 @@ module Globalize
         end
 
         def move_data_to_translation_table
-          model.find_each do |record|
-            translation = record.translation_for(I18n.default_locale) || record.translations.build(:locale => I18n.default_locale)
-            fields.each do |attribute_name, attribute_type|
-              translation[attribute_name] = record.read_attribute(attribute_name, {:translated => false})
+          logger = Logger.new('log/spree-i18n.log')
+          logger.debug "Moving #{ model.count } #{ model.name }..."
+
+          start = Time.zone.now
+
+          if model == Spree::Product
+            locales = { 'ID' => :id, 'MY' => :en, 'TH' => :th }
+
+            records = Spree::Product.joins(stock_items: [{ stock_location: :country }]).
+              select("DISTINCT ON(id, iso_name) spree_products.*, spree_countries.iso_name").
+              where(Spree::Variant.arel_table[:is_master].eq(true))
+
+            records.find_each do |record|
+              locale = locales[record.iso_name] || :en
+              translation = record.translation_for(locale) || record.translations.build(locale: locale)
+              fields.each do |attribute_name, attribute_type|
+                translation[attribute_name] = record.read_attribute(attribute_name, { translated: false })
+              end
+              translation.save!
             end
-            translation.save!
+          else
+            model.find_each do |record|
+              translation = record.translation_for(I18n.default_locale) || record.translations.build(locale: I18n.default_locale)
+              fields.each do |attribute_name, attribute_type|
+                translation[attribute_name] = record.read_attribute(attribute_name, { translated: false })
+              end
+              translation.save!
+            end
           end
+
+          finish = Time.zone.now
+          logger.debug [start.to_s, finish.to_s]
+          logger.debug finish - start
         end
 
         def move_data_to_model_table
