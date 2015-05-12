@@ -131,6 +131,14 @@ module Globalize
                 translation.save!
               end
             end
+
+            Spree::Product.eager_load(:stock_items).where(Spree::StockItem.arel_table[:id].eq(nil)).find_each do |record|
+              translation = record.translation_for(:en) || record.translations.build(locale: :en)
+              fields.each do |attribute_name, attribute_type|
+                translation[attribute_name] = record.read_attribute(attribute_name, { translated: false })
+              end
+              translation.save!
+            end
           else
             model.find_each do |record|
               translation = record.translation_for(I18n.default_locale) || record.translations.build(locale: I18n.default_locale)
