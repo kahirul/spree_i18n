@@ -43,7 +43,12 @@ module Globalize
 
           add_translation_fields
           clear_schema_cache!
-          move_data_to_translation_table if options[:migrate_data]
+
+          model.no_touching do
+            if options[:migrate_data]
+              move_data_to_translation_table
+            end
+          end
           remove_source_columns if options[:remove_source_columns]
           clear_schema_cache!
         end
